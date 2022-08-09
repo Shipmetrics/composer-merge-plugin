@@ -18,12 +18,16 @@ use Composer\Factory;
 use Composer\Installer;
 use Composer\Installer\PackageEvent;
 use Composer\Installer\PackageEvents;
+use Composer\IO\ConsoleIO;
 use Composer\IO\IOInterface;
 use Composer\Package\RootPackageInterface;
 use Composer\Plugin\PluginEvents;
 use Composer\Plugin\PluginInterface;
 use Composer\Script\Event as ScriptEvent;
 use Composer\Script\ScriptEvents;
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Console\Input\Input;
+use Symfony\Component\Console\Input\InputInterface;
 
 /**
  * Composer plugin that allows merging multiple composer.json files.
@@ -355,11 +359,29 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
             $preferSource = $config->get('preferred-install') == 'source';
             $preferDist = $config->get('preferred-install') == 'dist';
 
+            /** @var IOInterface|ConsoleIO $io */
+            $io = $event->getIO();
+
+            $inputProperty = new \ReflectionProperty(ConsoleIO::class, 'input');
+            $inputProperty->setAccessible(true);
+
+            /** @var InputInterface|ArgvInput $input */
+            $input = $inputProperty->getValue($io);
+
+            $optionsProperty = new \ReflectionProperty(Input::class, 'options');
+            $optionsProperty->setAccessible(true);
+
+            /** @var array $options */
+            $options = $optionsProperty->getValue($input);
+
+            $disablePlugins = isset($options['no-plugins']) && $options['no-plugins'];
+            $disableScripts = isset($options['no-scripts']) && $options['no-scripts'];
+
             $installer = Installer::create(
                 $event->getIO(),
                 // Create a new Composer instance to ensure full processing of
                 // the merged files.
-                Factory::create($event->getIO(), null, false)
+                Factory::create($event->getIO(), null, $disablePlugins, $disableScripts)
             );
 
             $installer->setPreferSource($preferSource);
